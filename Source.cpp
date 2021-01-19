@@ -34,12 +34,8 @@ int main(int argc, char* argv[]) {
 
 	// Morph images
 	cv::Mat morphed;
-	cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(2, 2));
-	cv::morphologyEx(binImage, morphed, cv::MORPH_ERODE, kernel, cv::Point(-1, -1), 1);
-
-	// Get gradient
-	cv::Mat gradient;
-	cv::Canny(morphed, gradient, 100, 200);
+	cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(5, 5));
+	cv::morphologyEx(binImage, morphed, cv::MORPH_CLOSE, kernel, cv::Point(-1, -1), 2);
 
 	// Get cell centers
 	std::vector<cv::Point2f> centers = getCellCenters(morphed);
@@ -50,14 +46,12 @@ int main(int argc, char* argv[]) {
 	}
 	
 	// display the image
-	for (;;) {
-		cv::imshow("Display window", patch);
+	cv::imshow("Display window", markers);
+	cv::waitKey(0);
 
-		char ch = cv::waitKey(10);
+	// cv::imwrite("patch.jpg", patch);
 
-		if (char(ch) == 27)
-			break;
-	}
+	cv::destroyAllWindows();
 
 	return 0;
 }
