@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
 	}
 	
 	// display the image
-	cv::imshow("Display window", markers);
+	cv::imshow("Display window", patch);
 	cv::waitKey(0);
 
 	// cv::imwrite("patch.jpg", patch);
