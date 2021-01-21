@@ -3,8 +3,11 @@
 #include "opencv2\imgproc\imgproc.hpp"
 #include <iostream>
 
+// White cells dark background
 #define FRST_MODE_BRIGHT 1
+// Dark cells bright background
 #define FRST_MODE_DARK 2
+// A mix of both
 #define FRST_MODE_BOTH 3
 
 /**
@@ -143,7 +146,6 @@ void frst2d(const cv::Mat& inputImage, cv::Mat& outputImage, const int radii, co
 	outputImage = S(cv::Rect(radii, radii, width, height));
 }
 
-
 /**
 Perform the specified morphological operation on input image with structure element of specified type and size
 @param inputImage Input image of any type (preferrably 8-bit). The resulting image overwrites the input
@@ -159,6 +161,7 @@ void bwMorph(cv::Mat& inputImage, const int operation, const int mShape = cv::MO
 	cv::Mat element = cv::getStructuringElement(mShape, cv::Size(_mSize, _mSize));
 	cv::morphologyEx(inputImage, inputImage, operation, element, cv::Point(-1, -1), iterations);
 }
+
 /**
 Perform the specified morphological operation on input image with structure element of specified type and size
 @param inputImage Input image of any type (preferrably 8-bit)
@@ -176,40 +179,120 @@ void bwMorph(const cv::Mat& inputImage, cv::Mat& outputImage, const int operatio
 }
 
 /**
+Returns the centers in an array
+@param contours found contours in image
+@param centerOfMass get the center of masse of the blobs
+@param contourIdx number of elements (contours) in vector
+*/
+std::vector<cv::Point> bhContoursCenter(const std::vector<std::vector<cv::Point>>& contours, bool centerOfMass, int contourIdx = -1)
+{
+	std::vector<cv::Point> result;
+	if (contourIdx > -1)
+	{
+		if (centerOfMass)
+		{
+			cv::Moments m = moments(contours[contourIdx], true);
+			result.push_back(cv::Point(m.m10 / m.m00, m.m01 / m.m00));
+		}
+		else
+		{
+			cv::Rect rct = boundingRect(contours[contourIdx]);
+			result.push_back(cv::Point(rct.x + rct.width / 2, rct.y + rct.height / 2));
+		}
+	}
+	else
+	{
+		if (centerOfMass)
+		{
+			for (int i = 0; i < contours.size(); i++)
+			{
+				cv::Moments m = moments(contours[i], true);
+				result.push_back(cv::Point(m.m10 / m.m00, m.m01 / m.m00));
+
+			}
+		}
+		else
+		{
+
+			for (int i = 0; i < contours.size(); i++)
+			{
+				cv::Rect rct = boundingRect(contours[i]);
+				result.push_back(cv:: Point(rct.x + rct.width / 2, rct.y + rct.height / 2));
+			}
+		}
+	}
+
+	return result;
+}
+
+/**
+Performs non maximum suppression (removing non maximum local points)
+@param image Input Image
+@param neighbor local neighborhood size to consider
+*/
+std::vector<cv::Point> bhFindLocalMaximum(cv::Mat  _src, int neighbor = 12) {
+	cv::Mat src = _src;
+
+	cv::Mat peak_img = src.clone();
+	cv::dilate(peak_img, peak_img, cv::Mat(), cv::Point(-1, -1), neighbor);
+	peak_img = peak_img - src;
+
+
+
+	cv::Mat flat_img;
+	erode(src, flat_img, cv::Mat(), cv::Point(-1, -1), neighbor);
+	flat_img = src - flat_img;
+
+
+	threshold(peak_img, peak_img, 0, 255, cv::THRESH_BINARY);
+	threshold(flat_img, flat_img, 0, 255, cv::THRESH_BINARY);
+	bitwise_not(flat_img, flat_img);
+
+	peak_img.setTo(cv::Scalar::all(255), flat_img);
+	bitwise_not(peak_img, peak_img);
+
+
+	std::vector<std::vector<cv::Point>> contours;
+	findContours(peak_img, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+	return bhContoursCenter(contours, true);
+}
+
+/**
 returns center points of cells
 @param inputImage Input image (binary grayscale 8-bit)
 */
-std::vector<cv::Point2f> getCellCenters(const cv::Mat& inputImage) {
+std::vector<cv::Point> getCellCenters(const cv::Mat& inputImage) {
 
 	// apply FRST
 	cv::Mat frstImage;
-	frst2d(inputImage, frstImage, 12, 2, 0.1, FRST_MODE_DARK);
+	frst2d(inputImage, frstImage, 8, 2, 0.1, FRST_MODE_DARK);
 
-	// the frst will have irregular values, normalize them!
+	// display the image
+	cv::imshow("Display window", frstImage);
+	cv::waitKey(0);
+
+	// normalising the values of the FRST algorithm to [0, 1] because they are not regular
 	cv::normalize(frstImage, frstImage, 0.0, 1.0, cv::NORM_MINMAX);
 	frstImage.convertTo(frstImage, CV_8U, 255.0);
 
-	// the frst image is grayscale, let's binarize it
-	cv::Mat markers;
-	cv::threshold(frstImage, frstImage, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
-	bwMorph(frstImage, markers, cv::MORPH_CLOSE, cv::MORPH_ELLIPSE, 5);
+	// display the image
+	cv::imshow("Display window", frstImage);
+	cv::waitKey(0);
 
-	// the 'markers' image contains dots of different size. Let's vectorize it
-	std::vector< std::vector<cv::Point> > contours;
-	std::vector<cv::Vec4i> hierarchy;
+	// Setting up a flat kernel of size 3x3
+	cv::Mat_<float> kernel(3, 3);
+	kernel << 1, 1, 1, 1, 1, 1, 1, 1, 1;
 
-	contours.clear();
-	cv::findContours(markers, contours, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+	// Dilatation of the response to remove irrelevant points (noise)
+	cv::morphologyEx(frstImage, frstImage, cv::MORPH_DILATE, kernel, cv::Point(-1, -1), 1);
 
-	std::vector<cv::Point2f> mc(contours.size());
-	for (int i = 0; i < contours.size(); i++)
-	{
-		// get the moments
-		cv::Moments mu = moments(contours[i], false);
+	// display the image
+	cv::imshow("Display window", frstImage);
+	cv::waitKey(0);
 
-		//  get the mass centers:
-		mc.push_back(cv::Point2f(mu.m10 / mu.m00, mu.m01 / mu.m00));
+	// applying non max suppression and retreiving local maxima points (centers)
+	std::vector<cv::Point> localMax = bhFindLocalMaximum(frstImage, 10);
 
-	}
-	return mc;
+	return localMax;
 }

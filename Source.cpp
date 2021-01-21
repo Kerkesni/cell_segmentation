@@ -21,7 +21,10 @@ int main(int argc, char* argv[]) {
 		cv::cvtColor(image, image, cv::COLOR_RGB2GRAY);
 	}
 
-	cv::Mat patch(image, cv::Rect(cv::Point2i(0, 200), cv::Point2i(200, 400)));
+	cv::Mat patch(image, cv::Rect(cv::Point2i(0, 0), cv::Point2i(200, 200)));
+
+	cv::imshow("Display window", patch);
+	cv::waitKey(0);
 
 	// convert to grayscale
 	cv::Mat grayImg;
@@ -32,13 +35,19 @@ int main(int argc, char* argv[]) {
 	cv::GaussianBlur(grayImg, binImage, cv::Size(5, 5), 0);
 	cv::threshold(binImage, binImage, 0, 255, cv::THRESH_BINARY + cv::THRESH_OTSU);
 
+	cv::imshow("Display window", binImage);
+	cv::waitKey(0);
+
 	// Morph images
 	cv::Mat morphed;
-	cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(5, 5));
-	cv::morphologyEx(binImage, morphed, cv::MORPH_CLOSE, kernel, cv::Point(-1, -1), 2);
+	cv::Mat kernel = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(8, 8));
+	cv::morphologyEx(binImage, morphed, cv::MORPH_CLOSE, kernel, cv::Point(-1, -1), 1);
+
+	cv::imshow("Display window", morphed);
+	cv::waitKey(0);
 
 	// Get cell centers
-	std::vector<cv::Point2f> centers = getCellCenters(morphed);
+	std::vector<cv::Point> centers = getCellCenters(morphed);
 
 	// Draw centers
 	for (cv::Point2f point : centers) {
